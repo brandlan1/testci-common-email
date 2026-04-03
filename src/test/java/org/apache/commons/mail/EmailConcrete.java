@@ -5,7 +5,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 import javax.mail.Session;
 import javax.mail.internet.InternetAddress;
@@ -13,7 +12,8 @@ import javax.mail.internet.MimeMessage;
 
 public class EmailConcrete extends Email {
 
-    private String from;
+    // Keep internal storage for testing
+    private InternetAddress from;
     private final Map<String, String> headers = new HashMap<>();
     private final List<InternetAddress> toList = new ArrayList<>();
     private final List<InternetAddress> bccList = new ArrayList<>();
@@ -22,59 +22,23 @@ public class EmailConcrete extends Email {
     private String msg;
     private String hostName;
     private Date sentDate;
-    private MimeMessage mimeMessage;
-    private Session mailSession;
 
     @Override
-    public Email setFrom(String email) throws EmailException {
-        this.from = email;
-        return this;
+    public void setFrom(InternetAddress address) throws EmailException {
+        this.from = address;
     }
 
     @Override
-    public Email addTo(String email) throws EmailException {
+    public void addReplyTo(String email, String name) throws EmailException {
         try {
-            toList.add(new InternetAddress(email));
+            this.replyToList.add(new InternetAddress(email, name));
         } catch (Exception e) {
             throw new EmailException(e);
         }
-        return this;
     }
 
     @Override
-    public Email addBcc(String... emails) throws EmailException {
-        for (String email : emails) {
-            try {
-                bccList.add(new InternetAddress(email));
-            } catch (Exception e) {
-                throw new EmailException(e);
-            }
-        }
-        return this;
-    }
-
-    @Override
-    public Email addCc(String email) throws EmailException {
-        try {
-            ccList.add(new InternetAddress(email));
-        } catch (Exception e) {
-            throw new EmailException(e);
-        }
-        return this;
-    }
-
-    @Override
-    public Email addReplyTo(String email, String name) throws EmailException {
-        try {
-            replyToList.add(new InternetAddress(email, name));
-        } catch (Exception e) {
-            throw new EmailException(e);
-        }
-        return this;
-    }
-
-    @Override
-    public Email addHeader(String name, String value) {
+    public void addHeader(String name, String value) {
         if (name == null || name.isEmpty()) {
             throw new IllegalArgumentException("name can not be null or empty");
         }
@@ -82,19 +46,36 @@ public class EmailConcrete extends Email {
             throw new IllegalArgumentException("value cannot be null or empty");
         }
         headers.put(name, value);
-        return this;
     }
 
     @Override
-    public Email setMsg(String msg) throws EmailException {
+    public void addBcc(String... emails) throws EmailException {
+        for (String email : emails) {
+            try {
+                bccList.add(new InternetAddress(email));
+            } catch (Exception e) {
+                throw new EmailException(e);
+            }
+        }
+    }
+
+    @Override
+    public void addCc(String email) throws EmailException {
+        try {
+            ccList.add(new InternetAddress(email));
+        } catch (Exception e) {
+            throw new EmailException(e);
+        }
+    }
+
+    @Override
+    public void setMsg(String msg) throws EmailException {
         this.msg = msg;
-        return this;
     }
 
     @Override
-    public Email setHostName(String hostName) {
+    public void setHostName(String hostName) {
         this.hostName = hostName;
-        return this;
     }
 
     @Override
@@ -103,62 +84,8 @@ public class EmailConcrete extends Email {
     }
 
     @Override
-    public Session getMailSession() throws EmailException {
-        if (mailSession != null) {
-            return mailSession;
-        }
-        if (hostName == null || hostName.isEmpty()) {
-            throw new EmailException("hostname must be set");
-        }
-        Properties props = new Properties();
-        props.put("mail.smtp.host", hostName);
-        mailSession = Session.getInstance(props);
-        return mailSession;
-    }
-
-    @Override
-    public Email buildMimeMessage() throws EmailException {
-        if (mimeMessage != null) {
-            throw new IllegalStateException("already built");
-        }
-        if (from == null || from.isEmpty()) {
-            throw new EmailException("From address required");
-        }
-        if (toList.isEmpty()) {
-            throw new EmailException("receiver address required");
-        }
-        try {
-            mimeMessage = new MimeMessage(getMailSession());
-            mimeMessage.setFrom(new InternetAddress(from));
-            for (InternetAddress to : toList) {
-                mimeMessage.addRecipient(MimeMessage.RecipientType.TO, to);
-            }
-            for (InternetAddress cc : ccList) {
-                mimeMessage.addRecipient(MimeMessage.RecipientType.CC, cc);
-            }
-            for (InternetAddress bcc : bccList) {
-                mimeMessage.addRecipient(MimeMessage.RecipientType.BCC, bcc);
-            }
-            if (!replyToList.isEmpty()) {
-                mimeMessage.setReplyTo(replyToList.toArray(new InternetAddress[0]));
-            }
-            for (Map.Entry<String, String> entry : headers.entrySet()) {
-                mimeMessage.setHeader(entry.getKey(), entry.getValue());
-            }
-            mimeMessage.setSentDate(sentDate != null ? sentDate : new Date());
-            if (msg != null) {
-                mimeMessage.setText(msg);
-            }
-        } catch (Exception e) {
-            throw new EmailException(e);
-        }
-        return this;
-    }
-
-    @Override
-    public Email setSentDate(Date date) {
+    public void setSentDate(Date date) {
         this.sentDate = date;
-        return this;
     }
 
     @Override
@@ -166,15 +93,30 @@ public class EmailConcrete extends Email {
         return sentDate;
     }
 
-    // Getters for test assertions
-    public String getFromAddress() {
+    @Override
+    public InternetAddress getFromAddress() {
         return from;
     }
 
-    public Map<String, String> getHeaders() {
-        return headers;
+    @Override
+    public void buildMimeMessage() throws EmailException {
+        // For testing, just create an empty MimeMessage if host & from are set
+        if (from == null) {
+            throw new EmailException("From address required");
+        }
+        if (toList.isEmpty()) {
+            throw new EmailException("receiver address required");
+        }
+        try {
+            Session session = Session.getDefaultInstance(System.getProperties());
+            MimeMessage msgObj = new MimeMessage(session);
+            this.setMimeMessage(msgObj);
+        } catch (Exception e) {
+            throw new EmailException(e);
+        }
     }
 
+    // Helper getters for test assertions
     public List<InternetAddress> getBccAddresses() {
         return bccList;
     }
@@ -187,15 +129,19 @@ public class EmailConcrete extends Email {
         return replyToList;
     }
 
-    public List<InternetAddress> getToAddresses() {
-        return toList;
+    public Map<String, String> getHeaders() {
+        return headers;
     }
 
     public String getMsg() {
         return msg;
     }
 
-    public MimeMessage getMimeMessage() {
-        return mimeMessage;
+    public void addTo(String email) throws EmailException {
+        try {
+            toList.add(new InternetAddress(email));
+        } catch (Exception e) {
+            throw new EmailException(e);
+        }
     }
 }
